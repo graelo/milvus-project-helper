@@ -36,7 +36,10 @@ def check_password_strength(password: str):
 
 
 def setup_project_resources(
-    client: MilvusClient, resource_names: ProjectResourceNaming, recreate: bool = False
+    client: MilvusClient,
+    resource_names: ProjectResourceNaming,
+    recreate: bool = False,
+    skip_if_exists: bool = False,
 ):
     rn = resource_names
 
@@ -47,13 +50,36 @@ def setup_project_resources(
         client.drop_role(rn.role_name)
 
     # 1. Create project database
-    client.create_database(rn.database_name)
+    if client.database_exists(rn.database_name):
+        if skip_if_exists:
+            typer.echo(
+                f"Database {rn.database_name} already exists, skipping creation."
+            )
+        else:
+            typer.echo(f"Database {rn.database_name} already exists.")
+            raise typer.Exit(code=1)
+    else:
+        client.create_database(rn.database_name)
 
     # 2. Create project user
-    client.create_user(user_name=rn.project_name, password="secure_password")
+    if client.user_exists(rn.user_name):
+        if skip_if_exists:
+            typer.echo(f"User {rn.user_name} already exists, skipping creation.")
+        else:
+            typer.echo(f"User {rn.user_name} already exists.")
+            raise typer.Exit(code=1)
+    else:
+        client.create_user(user_name=rn.user_name, password=rn.user_password)
 
     # 3. Create project role in the database
-    client.create_role(rn.role_name)
+    if client.role_exists(rn.role_name):
+        if skip_if_exists:
+            typer.echo(f"Role {rn.role_name} already exists, skipping creation.")
+        else:
+            typer.echo(f"Role {rn.role_name} already exists.")
+            raise typer.Exit(code=1)
+    else:
+        client.create_role(rn.role_name)
 
     # 4. Grant database-specific privileges
     client.grant_privilege(
@@ -85,6 +111,10 @@ def setup_project(
     recreate: bool = typer.Option(
         False,
         help="Drop and recreate the project resources if they already exist",
+    ),
+    skip_if_exists: bool = typer.Option(
+        False,
+        help="Skip creation if the resource already exists",
     ),
     database_name: Annotated[
         None | str,
@@ -133,14 +163,14 @@ def setup_project(
     for k, v in resource_names.__dict__.items():
         typer.echo(f"  {k}: {v}")
 
-    # typer.echo(f"Resource names: {resource_names}")
-
     if dry_run:
         typer.echo("Dry run: exiting without executing commands")
         return
 
     client = MilvusClient(uri=uri)
-    setup_project_resources(client, resource_names, recreate=recreate)
+    setup_project_resources(
+        client, resource_names, recreate=recreate, skip_if_exists=skip_if_exists
+    )
 
 
 @app.command()
