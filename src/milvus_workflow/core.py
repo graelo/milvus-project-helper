@@ -43,65 +43,43 @@ def check_password_strength(password: str):
 def setup_project_resources(
     client: MilvusClient,
     resource_names: ProjectResourceNaming,
-    recreate: bool = False,
-    skip_if_exists: bool = False,
+    recreate_resources: bool = False,
 ):
     rn = resource_names
 
+    # Check the status of each resource
+    database_exists = client.database_exists(rn.database_name)
+    user_exists = client.user_exists(rn.user_name)
+    role_exists = client.role_exists(rn.role_name)
+
+    # Print the status of each resource
+    print(f"Database {rn.database_name} exists: {'✅' if database_exists else '❌'}")
+    print(f"User {rn.user_name} exists: {'✅' if user_exists else '❌'}")
+    print(f"Role {rn.role_name} exists: {'✅' if role_exists else '❌'}")
+
     # 0. Drop existing resources if recreate=True
-    if recreate:
-        client.drop_database(rn.database_name)
-        client.drop_user(rn.user_name)
-        client.drop_role(rn.role_name)
+    if recreate_resources:
+        if database_exists:
+            client.drop_database(rn.database_name)
+        if user_exists:
+            client.drop_user(rn.user_name)
+        if role_exists:
+            client.drop_role(rn.role_name)
 
     # 1. Create project database
-    if client.database_exists(rn.database_name):
-        if skip_if_exists:
-            print(f"Database {rn.database_name} already exists, skipping.")
-
-        else:
-            raise ResourceExistsError(f"Database {rn.database_name} already exists.")
+    if database_exists:
+        raise ResourceExistsError(f"Database {rn.database_name} already exists.")
     else:
         client.create_database(rn.database_name)
 
     # 2. Create project user
-    if client.user_exists(rn.user_name):
-        if skip_if_exists:
-            print(f"User {rn.user_name} already exists, skipping.")
-        else:
-            raise ResourceExistsError(f"User {rn.user_name} already exists.")
+    if user_exists:
+        raise ResourceExistsError(f"User {rn.user_name} already exists.")
     else:
         client.create_user(user_name=rn.user_name, password=rn.user_password)
 
     # 3. Create project role in the database
-    if client.role_exists(rn.role_name):
-        if skip_if_exists:
-            print(f"Role {rn.role_name} already exists, skipping.")
-        else:
-            raise ResourceExistsError(f"Role {rn.role_name} already exists.")
+    if role_exists:
+        raise ResourceExistsError(f"Role {rn.role_name} already exists.")
     else:
         client.create_role(rn.role_name)
-
-    # 4. Grant database-specific privileges
-    if not client.has_privilege(
-        role_name=rn.role_name,
-        object_type="Collection",
-        object_name="*",
-        privilege="CreateCollection",
-        db_name=rn.database_name,
-    ):
-        client.grant_privilege(
-            role_name=rn.role_name,
-            object_type="Collection",
-            object_name="*",
-            privilege="CreateCollection",
-            db_name=rn.database_name,
-        )
-    else:
-        print(f"Privilege already granted to role {rn.role_name}.")
-
-    # 5. Bind role to user
-    if not client.has_role(user_name=rn.user_name, role_name=rn.role_name):
-        client.grant_role(user_name=rn.user_name, role_name=rn.role_name)
-    else:
-        print(f"Role {rn.role_name} already granted to user {rn.user_name}.")

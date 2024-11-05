@@ -2,9 +2,17 @@ from typing_extensions import Annotated
 
 import typer
 from pymilvus import MilvusClient
-from core import ProjectResourceNaming, check_password_strength, setup_project_resources, PasswordStrengthError, ResourceExistsError
+
+from .core import (
+    ProjectResourceNaming,
+    check_password_strength,
+    setup_project_resources,
+    PasswordStrengthError,
+    ResourceExistsError,
+)
 
 app = typer.Typer(no_args_is_help=True)
+
 
 @app.command()
 def setup_project(
@@ -24,9 +32,9 @@ def setup_project(
     ),
     #
     #
-    recreate: bool = typer.Option(
+    force: bool = typer.Option(
         False,
-        help="Drop and recreate the project resources if they already exist",
+        help="Recreate the project resources if they already exist",
     ),
     #
     #
@@ -76,13 +84,13 @@ def setup_project(
     if not user_password:
         user_password = typer.prompt("Enter password for the new user", hide_input=True)
     assert user_password is not None and user_password != ""
-    
+
     try:
         check_password_strength(user_password)
     except PasswordStrengthError as e:
-        typer.echo(str(e))
+        typer.echo("❌ " + str(e))
         raise typer.Exit(code=1)
-    
+
     resource_names = ProjectResourceNaming(
         project_name=project_name,
         database_name=database_name or f"db_{project_name}",
@@ -90,20 +98,27 @@ def setup_project(
         user_name=user_name or f"user_{project_name}",
         user_password=user_password,
     )
-    
+
     for k, v in resource_names.__dict__.items():
         typer.echo(f"  {k}: {v}")
-    
+
     if dry_run:
         typer.echo("Dry run: exiting without executing commands")
         return
-    
+
     client = MilvusClient(uri=uri)
-    
+
     try:
         setup_project_resources(
-            client, resource_names, recreate=recreate, skip_if_exists=skip_if_exists
+            client,
+            resource_names,
+            recreate_resources=force,
         )
     except ResourceExistsError as e:
-        typer.echo(str(e))
+        typer.echo("❌ " + str(e))
         raise typer.Exit(code=1)
+
+
+@app.callback()
+def callback():
+    pass
