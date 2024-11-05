@@ -40,7 +40,7 @@ def check_password_strength(password: str):
         )
 
 
-def setup_project_resources(
+def project_create_resources(
     client: MilvusClient,
     resource_names: ProjectResourceNaming,
     recreate_resources: bool = False,
@@ -48,9 +48,9 @@ def setup_project_resources(
     rn = resource_names
 
     # Check the status of each resource
-    database_exists = client.database_exists(rn.database_name)
-    user_exists = client.user_exists(rn.user_name)
-    role_exists = client.role_exists(rn.role_name)
+    database_exists = rn.database_name in client.list_databases()
+    user_exists = rn.user_name in client.list_users()
+    role_exists = rn.role_name in client.list_roles()
 
     # Print the status of each resource
     print(f"Database {rn.database_name} exists: {'✅' if database_exists else '❌'}")
@@ -61,10 +61,13 @@ def setup_project_resources(
     if recreate_resources:
         if database_exists:
             client.drop_database(rn.database_name)
+            database_exists = False
         if user_exists:
             client.drop_user(rn.user_name)
+            user_exists = False
         if role_exists:
             client.drop_role(rn.role_name)
+            role_exists = False
 
     # 1. Create project database
     if database_exists:
@@ -96,29 +99,34 @@ def setup_project_resources(
         ]
 
         for privilege in collection_privileges:
-            client.grant_privilege(rn.role_name, rn.database_name, "*", privilege)
+            client.grant_privilege(
+                role_name=rn.role_name,
+                object_type="Collection",
+                object_name="*",
+                privilege=privilege,
+            )
             print(f"Granted {privilege} privilege to role {rn.role_name}")
 
         # Assign role to user
-        client.add_user_to_role(rn.user_name, rn.role_name)
+        client.grant_role(rn.user_name, rn.role_name)
         print(f"Assigned role {rn.role_name} to user {rn.user_name}")
 
 
-def list_project_resources(
-    client: MilvusClient, project_name: str, user_name: str = None
+def project_describe_resources(
+    client: MilvusClient, project_name: str, user_name: None | str = None
 ):
     """List the resources and collections in a project and check user privileges."""
     database_name = f"db_{project_name}"
     role_name = f"role_{project_name}"
     default_user_name = f"user_{project_name}"
 
-    database_exists = client.database_exists(database_name)
+    database_exists = database_name in client.list_databases()
     user_exists = (
-        client.user_exists(user_name)
+        user_name in client.list_users()
         if user_name
-        else client.user_exists(default_user_name)
+        else default_user_name in client.list_users()
     )
-    role_exists = client.role_exists(role_name)
+    role_exists = role_name in client.list_roles()
 
     print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
     print(
@@ -127,28 +135,29 @@ def list_project_resources(
     print(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
 
     if database_exists:
-        collections = client.list_collections(database_name)
+        collections: list[str] = client.list_collections()
         print(f"Collections in {database_name}: {collections}")
 
-        users_to_check = [user_name] if user_name else client.list_users(database_name)
+        users_to_check = [user_name] if user_name else client.list_users()
         for user in users_to_check:
-            print(f"Checking privileges for user {user}:")
-            for collection in collections:
-                privileges = client.get_privileges(user, database_name, collection)
-                print(f"  Collection {collection}: {privileges}")
+            print(f"Checking roles of user `{user}`")
+            for role in client.list_roles():
+                print(f"  role {role}:")
+                privileges: list[dict[str, str]] = client.describe_role(role_name=role)[
+                    "privileges"
+                ]  # type: ignore
+                for p in privileges:
+                    print(f"    - {p}")
     else:
         print(f"No collections found as database {database_name} does not exist.")
 
-    # Hide the password in the output
-    print("User password: (hidden)")
 
-
-def drop_project_resources(
+def project_drop_resources(
     client: MilvusClient,
     project_name: str,
-    database_name: str = None,
-    role_name: str = None,
-    user_name: str = None,
+    database_name: None | str = None,
+    role_name: None | str = None,
+    user_name: None | str = None,
 ):
     """Drop all resources associated with a project."""
     # Use default names if not provided
@@ -157,9 +166,9 @@ def drop_project_resources(
     user_name = user_name or f"user_{project_name}"
 
     # Check what exists
-    database_exists = client.database_exists(database_name)
-    user_exists = client.user_exists(user_name)
-    role_exists = client.role_exists(role_name)
+    database_exists = database_name in client.list_databases()
+    user_exists = user_name in client.list_users()
+    role_exists = role_name in client.list_roles()
 
     # Print the status of each resource
     print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
@@ -176,5 +185,20 @@ def drop_project_resources(
         print(f"Dropped user {user_name}")
 
     if role_exists:
+        for priv in client.describe_role(role_name)["privileges"]:  # type: ignore
+            client.revoke_privilege(**priv)
         client.drop_role(role_name)
         print(f"Dropped role {role_name}")
+
+
+def database_list_all(client: MilvusClient):
+    """List all databases and their details."""
+    databases = client.list_databases()
+    print(f"Found {len(databases)} databases:")
+    for db in databases:
+        print(f"\nDatabase: {db}")
+        try:
+            collections = client.list_collections()
+            print(f"  Collections: {collections}")
+        except Exception as _:
+            print("  Collections: Unable to list (insufficient privileges)")

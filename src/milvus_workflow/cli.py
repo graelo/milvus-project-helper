@@ -6,25 +6,24 @@ from pymilvus import MilvusClient
 from .core import (
     ProjectResourceNaming,
     check_password_strength,
-    setup_project_resources,
-    drop_project_resources,
+    project_create_resources,
+    project_drop_resources,
     PasswordStrengthError,
     ResourceExistsError,
-    list_project_resources,
+    project_describe_resources,
+    database_list_all,
 )
 
 app = typer.Typer(no_args_is_help=True)
-create_app = typer.Typer()
-show_app = typer.Typer()
-drop_app = typer.Typer()
 
-app.add_typer(create_app, name="create")
-app.add_typer(show_app, name="show")
-app.add_typer(drop_app, name="drop")
+project_app = typer.Typer()
+database_app = typer.Typer()
+app.add_typer(project_app, name="project")
+app.add_typer(database_app, name="database")
 
 
-@create_app.command("project")
-def create_project(
+@project_app.command("create")
+def project_create(
     uri: Annotated[
         str,
         typer.Option(
@@ -44,12 +43,6 @@ def create_project(
     force: bool = typer.Option(
         False,
         help="Recreate the project resources if they already exist",
-    ),
-    #
-    #
-    skip_if_exists: bool = typer.Option(
-        False,
-        help="Skip creation if the resource already exists",
     ),
     #
     #
@@ -121,7 +114,7 @@ def create_project(
     client = MilvusClient(uri=uri)
 
     try:
-        setup_project_resources(
+        project_create_resources(
             client,
             resource_names,
             recreate_resources=force,
@@ -131,8 +124,8 @@ def create_project(
         raise typer.Exit(code=1)
 
 
-@show_app.command("project")
-def show_project(
+@project_app.command("describe")
+def project_describe(
     uri: Annotated[
         str,
         typer.Option(
@@ -155,14 +148,11 @@ def show_project(
 
     client = MilvusClient(uri=uri)
 
-    list_project_resources(client, project_name, user_name)
-
-    # Hide the password in the output
-    typer.echo("User password: (hidden)")
+    project_describe_resources(client, project_name, user_name)
 
 
-@drop_app.command("project")
-def drop_project(
+@project_app.command("drop")
+def project_drop(
     uri: Annotated[
         str,
         typer.Option(
@@ -209,7 +199,7 @@ def drop_project(
         raise typer.Exit(code=1)
 
     client = MilvusClient(uri=uri)
-    drop_project_resources(
+    project_drop_resources(
         client,
         project_name,
         database_name,
@@ -218,6 +208,16 @@ def drop_project(
     )
 
 
-@app.callback()
-def callback():
-    pass
+@database_app.command("list")
+def database_list(
+    uri: Annotated[
+        str,
+        typer.Option(
+            envvar="MILVUS_URI",
+            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'",
+        ),
+    ],
+):
+    """List all databases and their collections."""
+    client = MilvusClient(uri=uri)
+    database_list_all(client)
