@@ -82,16 +82,28 @@ def setup_project_resources(
         client.create_role(rn.role_name)
 
     # 4. Grant database-specific privileges
-    client.grant_privilege(
+    if not client.has_privilege(
         role_name=rn.role_name,
         object_type="Collection",
         object_name="*",
         privilege="CreateCollection",
         db_name=rn.database_name,
-    )
+    ):
+        client.grant_privilege(
+            role_name=rn.role_name,
+            object_type="Collection",
+            object_name="*",
+            privilege="CreateCollection",
+            db_name=rn.database_name,
+        )
+    else:
+        typer.echo(f"Privilege already granted to role {rn.role_name}.")
 
     # 5. Bind role to user
-    client.grant_role(user_name=rn.user_name, role_name=rn.role_name)
+    if not client.has_role(user_name=rn.user_name, role_name=rn.role_name):
+        client.grant_role(user_name=rn.user_name, role_name=rn.role_name)
+    else:
+        typer.echo(f"Role {rn.role_name} already granted to user {rn.user_name}.")
 
 
 @app.command()
