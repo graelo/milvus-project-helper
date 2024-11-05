@@ -7,21 +7,24 @@ from .core import (
     ProjectResourceNaming,
     check_password_strength,
     setup_project_resources,
+    drop_project_resources,
     PasswordStrengthError,
     ResourceExistsError,
     list_project_resources,
 )
 
 app = typer.Typer(no_args_is_help=True)
-init_app = typer.Typer()
+create_app = typer.Typer()
 show_app = typer.Typer()
+drop_app = typer.Typer()
 
-app.add_typer(init_app, name="init")
+app.add_typer(create_app, name="create")
 app.add_typer(show_app, name="show")
+app.add_typer(drop_app, name="drop")
 
 
-@init_app.command("project")
-def init_project(
+@create_app.command("project")
+def create_project(
     uri: Annotated[
         str,
         typer.Option(
@@ -156,6 +159,63 @@ def show_project(
 
     # Hide the password in the output
     typer.echo("User password: (hidden)")
+
+
+@drop_app.command("project")
+def drop_project(
+    uri: Annotated[
+        str,
+        typer.Option(
+            envvar="MILVUS_URI",
+            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'. "
+            "The user must be able to drop databases, roles and users",
+        ),
+    ],
+    project_name: Annotated[str, typer.Argument(help="Name of the project to drop")],
+    database_name: Annotated[
+        None | str,
+        typer.Option(
+            help="Name of the database to drop (default: 'db_<project_name>')",
+        ),
+    ] = None,
+    role_name: Annotated[
+        None | str,
+        typer.Option(
+            help="Name of the role to drop (default: 'role_<project_name>')",
+        ),
+    ] = None,
+    user_name: Annotated[
+        None | str,
+        typer.Option(
+            help="Name of the user to drop (default: 'user_<project_name>')",
+        ),
+    ] = None,
+    dry_run: bool = typer.Option(
+        True,
+        help="Print the resources that would be dropped without actually dropping them",
+    ),
+):
+    typer.echo(f"Dropping project `{project_name}`...")
+
+    if dry_run:
+        typer.echo("Dry run: would drop these resources:")
+        typer.echo(f"  database: {database_name or f'db_{project_name}'}")
+        typer.echo(f"  role: {role_name or f'role_{project_name}'}")
+        typer.echo(f"  user: {user_name or f'user_{project_name}'}")
+        return
+
+    if not typer.confirm("Are you sure you want to drop these resources?"):
+        typer.echo("Operation cancelled")
+        raise typer.Exit(code=1)
+
+    client = MilvusClient(uri=uri)
+    drop_project_resources(
+        client,
+        project_name,
+        database_name,
+        role_name,
+        user_name,
+    )
 
 
 @app.callback()

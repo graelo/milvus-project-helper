@@ -141,3 +141,40 @@ def list_project_resources(
 
     # Hide the password in the output
     print("User password: (hidden)")
+
+
+def drop_project_resources(
+    client: MilvusClient,
+    project_name: str,
+    database_name: str = None,
+    role_name: str = None,
+    user_name: str = None,
+):
+    """Drop all resources associated with a project."""
+    # Use default names if not provided
+    database_name = database_name or f"db_{project_name}"
+    role_name = role_name or f"role_{project_name}"
+    user_name = user_name or f"user_{project_name}"
+
+    # Check what exists
+    database_exists = client.database_exists(database_name)
+    user_exists = client.user_exists(user_name)
+    role_exists = client.role_exists(role_name)
+
+    # Print the status of each resource
+    print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
+    print(f"User {user_name} exists: {'✅' if user_exists else '❌'}")
+    print(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+
+    # Drop in reverse order of dependencies
+    if database_exists:
+        client.drop_database(database_name)
+        print(f"Dropped database {database_name}")
+
+    if user_exists:
+        client.drop_user(user_name)
+        print(f"Dropped user {user_name}")
+
+    if role_exists:
+        client.drop_role(role_name)
+        print(f"Dropped role {role_name}")
