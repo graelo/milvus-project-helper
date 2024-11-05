@@ -9,13 +9,19 @@ from .core import (
     setup_project_resources,
     PasswordStrengthError,
     ResourceExistsError,
+    list_project_resources,
 )
 
 app = typer.Typer(no_args_is_help=True)
+init_app = typer.Typer()
+show_app = typer.Typer()
+
+app.add_typer(init_app, name="init")
+app.add_typer(show_app, name="show")
 
 
-@app.command()
-def setup_project(
+@init_app.command("project")
+def init_project(
     uri: Annotated[
         str,
         typer.Option(
@@ -100,7 +106,10 @@ def setup_project(
     )
 
     for k, v in resource_names.__dict__.items():
-        typer.echo(f"  {k}: {v}")
+        if k == "user_password":
+            typer.echo(f"  {k}: (hidden)")
+        else:
+            typer.echo(f"  {k}: {v}")
 
     if dry_run:
         typer.echo("Dry run: exiting without executing commands")
@@ -117,6 +126,36 @@ def setup_project(
     except ResourceExistsError as e:
         typer.echo("❌ " + str(e))
         raise typer.Exit(code=1)
+
+
+@show_app.command("project")
+def show_project(
+    uri: Annotated[
+        str,
+        typer.Option(
+            envvar="MILVUS_URI",
+            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'. "
+            "The user must be able to create databases, roles and users",
+        ),
+    ],
+    project_name: Annotated[
+        str, typer.Argument(help="Name of the project to list resources for")
+    ],
+    user_name: Annotated[
+        None | str,
+        typer.Option(
+            help="Name of the user to check privileges for (default: check all users)"
+        ),
+    ] = None,
+):
+    typer.echo(f"Listing resources for project `{project_name}`...")
+
+    client = MilvusClient(uri=uri)
+
+    list_project_resources(client, project_name, user_name)
+
+    # Hide the password in the output
+    typer.echo("User password: (hidden)")
 
 
 @app.callback()

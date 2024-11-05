@@ -83,3 +83,61 @@ def setup_project_resources(
         raise ResourceExistsError(f"Role {rn.role_name} already exists.")
     else:
         client.create_role(rn.role_name)
+
+        # Grant collection-level privileges for typical vector DB operations
+        collection_privileges = [
+            "CreateIndex",  # Create vector indexes
+            "Load",  # Load collections into memory
+            "Insert",  # Add new vectors
+            "Delete",  # Remove vectors
+            "Search",  # Vector similarity search
+            "Query",  # Attribute filtering
+            "Flush",  # Ensure data persistence
+        ]
+
+        for privilege in collection_privileges:
+            client.grant_privilege(rn.role_name, rn.database_name, "*", privilege)
+            print(f"Granted {privilege} privilege to role {rn.role_name}")
+
+        # Assign role to user
+        client.add_user_to_role(rn.user_name, rn.role_name)
+        print(f"Assigned role {rn.role_name} to user {rn.user_name}")
+
+
+def list_project_resources(
+    client: MilvusClient, project_name: str, user_name: str = None
+):
+    """List the resources and collections in a project and check user privileges."""
+    database_name = f"db_{project_name}"
+    role_name = f"role_{project_name}"
+    default_user_name = f"user_{project_name}"
+
+    database_exists = client.database_exists(database_name)
+    user_exists = (
+        client.user_exists(user_name)
+        if user_name
+        else client.user_exists(default_user_name)
+    )
+    role_exists = client.role_exists(role_name)
+
+    print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
+    print(
+        f"User {user_name or default_user_name} exists: {'✅' if user_exists else '❌'}"
+    )
+    print(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+
+    if database_exists:
+        collections = client.list_collections(database_name)
+        print(f"Collections in {database_name}: {collections}")
+
+        users_to_check = [user_name] if user_name else client.list_users(database_name)
+        for user in users_to_check:
+            print(f"Checking privileges for user {user}:")
+            for collection in collections:
+                privileges = client.get_privileges(user, database_name, collection)
+                print(f"  Collection {collection}: {privileges}")
+    else:
+        print(f"No collections found as database {database_name} does not exist.")
+
+    # Hide the password in the output
+    print("User password: (hidden)")
