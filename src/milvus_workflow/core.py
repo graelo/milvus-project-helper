@@ -132,50 +132,42 @@ def project_describe_resources(
     """List the resources and collections in a project and check user privileges."""
     database_name = f"db_{project_name}"
     role_name = f"role_{project_name}"
-    default_user_name = f"user_{project_name}"
 
     database_exists = database_name in client.list_databases()
-    user_exists = (
-        user_name in client.list_users()
-        if user_name
-        else default_user_name in client.list_users()
-    )
     role_exists = role_name in client.list_roles()
+
+    users = client.list_users()
 
     logger.info(f"\nProject resources for '{project_name}':")
     logger.info("─" * 50)
     logger.info(format_resource_status(database_name, database_exists, "database"))
-    logger.info(
-        format_resource_status(user_name or default_user_name, user_exists, "user")
-    )
     logger.info(format_resource_status(role_name, role_exists, "role"))
 
-    if database_exists:
-        collections: list[str] = client.list_collections()
-        if collections:
-            logger.info("\nCollections:")
-            for coll in collections:
-                logger.info(f"  • {coll}")
-        else:
-            logger.info("\nNo collections found in database")
-
-        if user_name or user_exists:
-            users_to_check = [user_name] if user_name else [default_user_name]
-            logger.info("\nUser privileges:")
-            for user in users_to_check:
-                logger.info(f"\n  User: {user}")
-                for role in client.list_roles():
-                    privileges: list[dict[str, str]] = client.describe_role(
-                        role_name=role
-                    )["privileges"]
-                    if privileges:
-                        logger.info(f"    Role '{role}':")
-                        for p in privileges:
-                            logger.info(
-                                f"      • {p['privilege']} on {p['object_type']}"
-                            )
-    else:
+    if not database_exists:
         logger.info("\nℹ️  No additional information (database does not exist)")
+        return
+
+    collections: list[str] = client.list_collections()
+    if collections:
+        logger.info("\nCollections:")
+        for coll in collections:
+            logger.info(f"  • {coll}")
+    else:
+        logger.info("\nNo collections found in database")
+
+    if user_name or len(users) > 0:
+        users_to_check = [user_name] if user_name else users
+        logger.info("\nUser privileges:")
+        for user in users_to_check:
+            logger.info(f"\n  User: {user}")
+            for role in client.list_roles():
+                privileges: list[dict[str, str]] = client.describe_role(role_name=role)[
+                    "privileges"
+                ]
+                if privileges:
+                    logger.info(f"    Role '{role}':")
+                    for p in privileges:
+                        logger.info(f"      • {p['privilege']} on {p['object_type']}")
 
 
 def project_drop_resources(
