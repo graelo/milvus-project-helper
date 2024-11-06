@@ -1,0 +1,8 @@
+name: Pull-Requests
+
+on:
+  pull_request:
+
+jobs:
+  unit-test:
+    uses: graelo/milvus-project-helper/.github/workflows/test.yaml@main
