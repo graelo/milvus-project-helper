@@ -206,3 +206,38 @@ def drop_resources(
 
     client.drop_database(database_name)
     logger.info(f"  • Dropped database '{database_name}'")
+
+
+def change_user_password(
+    client: MilvusClient,
+    project_name: str,
+    user_name: str,
+    old_password: str,
+    new_password: str,
+):
+    """Change password for a user in a project."""
+    database_name = f"db_{project_name}"
+
+    # Check if database exists
+    if database_name not in client.list_databases():
+        raise ValueError(f"Database '{database_name}' does not exist")
+
+    try:
+        # Switch to project database context
+        client.using_database(database_name)
+
+        # Check if user exists
+        if user_name not in client.list_users():
+            raise ValueError(
+                f"User '{user_name}' does not exist in database '{database_name}'"
+            )
+
+        # Change the password
+        client.update_password(
+            user_name=user_name, old_password=old_password, new_password=new_password
+        )
+        logger.info(f"Successfully updated password for user '{user_name}'")
+
+    finally:
+        # Always switch back to original database
+        client.using_database("default")

@@ -33,9 +33,11 @@ def project_create(
             "The user must be able to create databases, roles and users",
         ),
     ],
-    dry_run: bool = typer.Option(
-        True,
-        help="Print the commands that would be executed without actually running them",
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompt",
     ),
     force: bool = typer.Option(
         False,
@@ -78,19 +80,19 @@ def project_create(
         database_name=database_name or f"db_{project_name}",
         role_name=role_name or f"role_{project_name}",
         user_name=user_name or f"user_{project_name}",
-        user_password="<password>" if dry_run else user_password or "",
+        user_password=user_password or "",
     )
 
     logger.info("\nResource naming:")
     for k, v in resource_names.__dict__.items():
         if k == "user_password":
-            logger.info(f"  • {k}: {'(not set)' if dry_run else '(not yet set)'}")
+            logger.info(f"  • {k}: {'(not yet set)'}")
         else:
             logger.info(f"  • {k}: {v}")
 
-    if dry_run:
-        logger.info("\nℹ️  Dry run: exiting without executing commands")
-        return
+    if not yes and not typer.confirm("\nDo you want to proceed?", default=True):
+        logger.info("Operation cancelled.")
+        raise typer.Exit()
 
     # Only prompt for password when actually creating resources
     if not resource_names.user_password:
@@ -167,17 +169,21 @@ def project_drop(
             help="Name of the database to drop (default: 'db_<project_name>')",
         ),
     ] = None,
-    dry_run: bool = typer.Option(
-        True,
-        help="Print the resources that would be dropped without actually dropping them",
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompt",
     ),
 ):
-    logger.info(f"Dropping project `{project_name}`...")
+    db_name = database_name or f"db_{project_name}"
+    logger.info(f"About to drop project `{project_name}` (database: {db_name})")
 
-    if dry_run:
-        logger.info("Dry run: would drop these resources:")
-        logger.info(f"  database: {database_name or f'db_{project_name}'}")
-        return
+    if not yes and not typer.confirm(
+        "\nAre you sure you want to proceed?", default=False
+    ):
+        logger.info("Operation cancelled.")
+        raise typer.Exit()
 
     client = MilvusClient(uri=uri)
     project.drop_resources(
@@ -185,6 +191,70 @@ def project_drop(
         project_name,
         database_name,
     )
+
+
+@project_app.command("change-password")
+def project_change_password(
+    uri: Annotated[
+        str,
+        typer.Option(
+            envvar="MILVUS_URI",
+            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'",
+        ),
+    ],
+    project_name: Annotated[str, typer.Argument(help="Name of the project")],
+    user_name: Annotated[
+        str,
+        typer.Option(
+            help="Name of the user to change password for (default: check all users)"
+        ),
+    ],
+    old_password: Annotated[
+        None | str, typer.Option(help="Old password for the user")
+    ] = None,
+    new_password: Annotated[
+        None | str, typer.Option(help="New password for the user")
+    ] = None,
+):
+    """Change password for a user in a project."""
+
+    try:
+        client = MilvusClient(uri=uri)
+
+        if not old_password:
+            logger.info("")
+            old_password = typer.prompt(
+                f"Enter old password for user `{user_name}`",
+                hide_input=True,
+                show_default=False,
+                show_choices=False,
+            )
+        assert old_password is not None and old_password != ""
+
+        if not new_password:
+            logger.info("")
+            new_password = typer.prompt(
+                "Enter new password for user `{user_name}`",
+                hide_input=True,
+                confirmation_prompt=True,  # Ask user to type twice
+                show_default=False,
+                show_choices=False,
+            )
+        assert new_password is not None and new_password != ""
+
+        # Validate the new password
+        utils.check_password_strength(new_password)
+
+        project.change_user_password(
+            client=client,
+            project_name=project_name,
+            user_name=user_name,
+            old_password=old_password,
+            new_password=new_password,
+        )
+    except Exception as e:
+        typer.echo(f"Error: {str(e)}", err=True)
+        raise typer.Exit(1)
 
 
 @database_app.command("list")
