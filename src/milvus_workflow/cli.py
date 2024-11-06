@@ -77,7 +77,9 @@ def project_create(
         str, typer.Argument(help="New project name")
     ] = "new-project",
 ):
-    logger.info(f"Setting up project `{project_name}`...")
+    logger.info(f"\nSetting up project '{project_name}':")
+    logger.info("─" * 50)
+
     if not user_password:
         user_password = typer.prompt("Enter password for the new user", hide_input=True)
     assert user_password is not None and user_password != ""
@@ -96,14 +98,15 @@ def project_create(
         user_password=user_password,
     )
 
+    logger.info("\nResource naming:")
     for k, v in resource_names.__dict__.items():
         if k == "user_password":
-            logger.info(f"  {k}: (hidden)")
+            logger.info(f"  • {k}: (hidden)")
         else:
-            logger.info(f"  {k}: {v}")
+            logger.info(f"  • {k}: {v}")
 
     if dry_run:
-        logger.info("Dry run: exiting without executing commands")
+        logger.info("\nℹ️  Dry run: exiting without executing commands")
         return
 
     client = MilvusClient(uri=uri)

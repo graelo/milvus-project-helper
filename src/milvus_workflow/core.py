@@ -55,54 +55,55 @@ def project_create_resources(
     user_exists = rn.user_name in client.list_users()
     role_exists = rn.role_name in client.list_roles()
 
-    # Log the status of each resource
-    logger.info(
-        f"Database {rn.database_name} exists: {'✅' if database_exists else '❌'}"
-    )
-    logger.info(f"User {rn.user_name} exists: {'✅' if user_exists else '❌'}")
-    logger.info(f"Role {rn.role_name} exists: {'✅' if role_exists else '❌'}")
+    # Log initial status
+    logger.info(f"\nProject resources for '{rn.project_name}':")
+    logger.info("─" * 50)
+    logger.info(format_resource_status(rn.database_name, database_exists, "database"))
+    logger.info(format_resource_status(rn.user_name, user_exists, "user"))
+    logger.info(format_resource_status(rn.role_name, role_exists, "role"))
 
-    # 0. Drop existing resources if recreate=True
-    if recreate_resources:
+    # Handle recreation if needed
+    if recreate_resources and (database_exists or user_exists or role_exists):
+        logger.info("\nRecreating existing resources:")
         if database_exists:
             client.drop_database(rn.database_name)
+            logger.info("  • Dropped database")
             database_exists = False
         if user_exists:
             client.drop_user(rn.user_name)
+            logger.info("  • Dropped user")
             user_exists = False
         if role_exists:
             client.drop_role(rn.role_name)
+            logger.info("  • Dropped role")
             role_exists = False
 
-    # 1. Create project database
-    if database_exists:
-        raise ResourceExistsError(f"Database {rn.database_name} already exists.")
-    else:
+    # Create resources
+    logger.info("\nCreating resources:")
+    if not database_exists:
         client.create_database(rn.database_name)
+        logger.info("  • Created database")
 
-    # 2. Create project user
-    if user_exists:
-        raise ResourceExistsError(f"User {rn.user_name} already exists.")
-    else:
+    if not user_exists:
         client.create_user(user_name=rn.user_name, password=rn.user_password)
+        logger.info("  • Created user")
 
-    # 3. Create project role in the database
-    if role_exists:
-        raise ResourceExistsError(f"Role {rn.role_name} already exists.")
-    else:
+    if not role_exists:
         client.create_role(rn.role_name)
+        logger.info("  • Created role")
 
-        # Grant collection-level privileges for typical vector DB operations
+        # Grant privileges
         collection_privileges = [
-            "CreateIndex",  # Create vector indexes
-            "Load",  # Load collections into memory
-            "Insert",  # Add new vectors
-            "Delete",  # Remove vectors
-            "Search",  # Vector similarity search
-            "Query",  # Attribute filtering
-            "Flush",  # Ensure data persistence
+            "CreateIndex",
+            "Load",
+            "Insert",
+            "Delete",
+            "Search",
+            "Query",
+            "Flush",
         ]
 
+        logger.info("\nGranting privileges:")
         for privilege in collection_privileges:
             client.grant_privilege(
                 role_name=rn.role_name,
@@ -110,11 +111,19 @@ def project_create_resources(
                 object_name="*",
                 privilege=privilege,
             )
-            logger.info(f"Granted {privilege} privilege to role {rn.role_name}")
+            logger.info(f"  • {privilege} on Collection")
 
-        # Assign role to user
         client.grant_role(rn.user_name, rn.role_name)
-        logger.info(f"Assigned role {rn.role_name} to user {rn.user_name}")
+        logger.info(f"\nAssigned role '{rn.role_name}' to user '{rn.user_name}'")
+
+
+def format_resource_status(
+    name: str, exists: bool, resource_type: str = "resource"
+) -> str:
+    """Format a resource status line with consistent symbols and indentation."""
+    status_symbol = "✓" if exists else "×"
+    status_color = "32" if exists else "31"  # 32=green, 31=red
+    return f"  \033[{status_color}m{status_symbol}\033[0m {resource_type}: {name}"
 
 
 def project_describe_resources(
@@ -133,28 +142,40 @@ def project_describe_resources(
     )
     role_exists = role_name in client.list_roles()
 
-    logger.info(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
+    logger.info(f"\nProject resources for '{project_name}':")
+    logger.info("─" * 50)
+    logger.info(format_resource_status(database_name, database_exists, "database"))
     logger.info(
-        f"User {user_name or default_user_name} exists: {'✅' if user_exists else '❌'}"
+        format_resource_status(user_name or default_user_name, user_exists, "user")
     )
-    logger.info(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+    logger.info(format_resource_status(role_name, role_exists, "role"))
 
     if database_exists:
         collections: list[str] = client.list_collections()
-        logger.info(f"Collections in {database_name}: {collections}")
+        if collections:
+            logger.info("\nCollections:")
+            for coll in collections:
+                logger.info(f"  • {coll}")
+        else:
+            logger.info("\nNo collections found in database")
 
-        users_to_check = [user_name] if user_name else client.list_users()
-        for user in users_to_check:
-            logger.info(f"Checking roles of user `{user}`")
-            for role in client.list_roles():
-                logger.info(f"  role {role}:")
-                privileges: list[dict[str, str]] = client.describe_role(role_name=role)[
-                    "privileges"
-                ]  # type: ignore
-                for p in privileges:
-                    logger.info(f"    - {p}")
+        if user_name or user_exists:
+            users_to_check = [user_name] if user_name else [default_user_name]
+            logger.info("\nUser privileges:")
+            for user in users_to_check:
+                logger.info(f"\n  User: {user}")
+                for role in client.list_roles():
+                    privileges: list[dict[str, str]] = client.describe_role(
+                        role_name=role
+                    )["privileges"]
+                    if privileges:
+                        logger.info(f"    Role '{role}':")
+                        for p in privileges:
+                            logger.info(
+                                f"      • {p['privilege']} on {p['object_type']}"
+                            )
     else:
-        logger.info(f"No collections found as database {database_name} does not exist.")
+        logger.info("\nℹ️  No additional information (database does not exist)")
 
 
 def project_drop_resources(
@@ -165,35 +186,39 @@ def project_drop_resources(
     user_name: None | str = None,
 ):
     """Drop all resources associated with a project."""
-    # Use default names if not provided
     database_name = database_name or f"db_{project_name}"
     role_name = role_name or f"role_{project_name}"
     user_name = user_name or f"user_{project_name}"
 
-    # Check what exists
     database_exists = database_name in client.list_databases()
     user_exists = user_name in client.list_users()
     role_exists = role_name in client.list_roles()
 
-    # Log the status of each resource
-    logger.info(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
-    logger.info(f"User {user_name} exists: {'✅' if user_exists else '❌'}")
-    logger.info(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+    # Log initial status
+    logger.info(f"\nProject resources for '{project_name}':")
+    logger.info("─" * 50)
+    logger.info(format_resource_status(database_name, database_exists, "database"))
+    logger.info(format_resource_status(user_name, user_exists, "user"))
+    logger.info(format_resource_status(role_name, role_exists, "role"))
 
-    # Drop in reverse order of dependencies
+    if not any([database_exists, user_exists, role_exists]):
+        logger.info("\nℹ️  No resources to drop")
+        return
+
+    logger.info("\nDropping resources:")
     if database_exists:
         client.drop_database(database_name)
-        logger.info(f"Dropped database {database_name}")
+        logger.info(f"  • Dropped database '{database_name}'")
 
     if user_exists:
         client.drop_user(user_name)
-        logger.info(f"Dropped user {user_name}")
+        logger.info(f"  • Dropped user '{user_name}'")
 
     if role_exists:
         for priv in client.describe_role(role_name)["privileges"]:  # type: ignore
             client.revoke_privilege(**priv)
         client.drop_role(role_name)
-        logger.info(f"Dropped role {role_name}")
+        logger.info(f"  • Dropped role '{role_name}'")
 
 
 def database_list_all(client: MilvusClient):
