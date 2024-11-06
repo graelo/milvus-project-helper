@@ -23,7 +23,7 @@ from . import database, project, utils
 logger = logging.getLogger(__name__)
 
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 project_app = typer.Typer()
 database_app = typer.Typer()
@@ -291,3 +291,18 @@ def database_list(
     """List all databases and their collections."""
     client = MilvusClient(uri=uri)
     database.list_all(client)
+
+
+import typer.completion
+
+
+@app.command("generate-completion")
+def completion(
+    ctx: typer.Context,
+    shell: Annotated[
+        str,
+        typer.Argument(help="The shell type ('bash', 'zsh', or 'fish')"),
+    ],
+) -> None:
+    """Generate the shell completion script for the specified shell."""
+    typer.completion.show_callback(ctx, None, shell)
