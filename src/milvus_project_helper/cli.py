@@ -4,18 +4,10 @@ from typing_extensions import Annotated
 import typer
 from pymilvus import MilvusClient
 
-from .project import (
-    ResourceNaming,
-    check_password_strength,
-    project_create_resources,
-    project_drop_resources,
-    project_describe_resources,
-    PasswordStrengthError,
-    ResourceExistsError,
-)
-from . import database
+from . import project, database, utils
 
 logger = logging.getLogger(__name__)
+
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -81,7 +73,7 @@ def project_create(
     logger.info("─" * 50)
 
     # Build resource names first, use placeholder for password in dry-run
-    resource_names = ResourceNaming(
+    resource_names = project.ResourceNaming(
         project_name=project_name,
         database_name=database_name or f"db_{project_name}",
         role_name=role_name or f"role_{project_name}",
@@ -113,20 +105,20 @@ def project_create(
     assert resource_names.user_password != ""
 
     try:
-        check_password_strength(resource_names.user_password)
-    except PasswordStrengthError as e:
+        utils.check_password_strength(resource_names.user_password)
+    except utils.PasswordStrengthError as e:
         typer.echo("❌ " + str(e))  # Keep typer.echo for error messages
         raise typer.Exit(code=1)
 
     client = MilvusClient(uri=uri)
 
     try:
-        project_create_resources(
+        project.create_resources(
             client,
             resource_names,
             recreate_resources=force,
         )
-    except ResourceExistsError as e:
+    except project.ResourceExistsError as e:
         typer.echo("❌ " + str(e))
         raise typer.Exit(code=1)
 
@@ -155,7 +147,7 @@ def project_describe(
 
     client = MilvusClient(uri=uri)
 
-    project_describe_resources(client, project_name, user_name)
+    project.describe_resources(client, project_name, user_name)
 
 
 @project_app.command("drop")
@@ -175,18 +167,6 @@ def project_drop(
             help="Name of the database to drop (default: 'db_<project_name>')",
         ),
     ] = None,
-    role_name: Annotated[
-        None | str,
-        typer.Option(
-            help="Name of the role to drop (default: 'role_<project_name>')",
-        ),
-    ] = None,
-    user_name: Annotated[
-        None | str,
-        typer.Option(
-            help="Name of the user to drop (default: 'user_<project_name>')",
-        ),
-    ] = None,
     dry_run: bool = typer.Option(
         True,
         help="Print the resources that would be dropped without actually dropping them",
@@ -197,17 +177,13 @@ def project_drop(
     if dry_run:
         logger.info("Dry run: would drop these resources:")
         logger.info(f"  database: {database_name or f'db_{project_name}'}")
-        logger.info(f"  role: {role_name or f'role_{project_name}'}")
-        logger.info(f"  user: {user_name or f'user_{project_name}'}")
         return
 
     client = MilvusClient(uri=uri)
-    project_drop_resources(
+    project.drop_resources(
         client,
         project_name,
         database_name,
-        role_name,
-        user_name,
     )
 
 
