@@ -50,25 +50,38 @@ def project_create_resources(
 ):
     rn = resource_names
 
-    # Check the status of each resource
+    # Check database existence first
     database_exists = rn.database_name in client.list_databases()
-    user_exists = rn.user_name in client.list_users()
-    role_exists = rn.role_name in client.list_roles()
 
-    # Log initial status
+    # Log initial status for database
     logger.info(f"\nProject resources for '{rn.project_name}':")
     logger.info("─" * 50)
     logger.info(format_resource_status(rn.database_name, database_exists, "database"))
+
+    # Handle database recreation if needed
+    if recreate_resources and database_exists:
+        logger.info("\nRecreating database:")
+        client.drop_database(rn.database_name)
+        logger.info("  • Dropped database")
+        database_exists = False
+
+    # Create database and switch context
+    if not database_exists:
+        client.create_database(rn.database_name)
+        logger.info("  • Created database")
+
+    # Switch to project database context
+    client.using_database(rn.database_name)
+
+    # Now check resources in this database context
+    user_exists = rn.user_name in client.list_users()
+    role_exists = rn.role_name in client.list_roles()
+
     logger.info(format_resource_status(rn.user_name, user_exists, "user"))
     logger.info(format_resource_status(rn.role_name, role_exists, "role"))
 
-    # Handle recreation if needed
-    if recreate_resources and (database_exists or user_exists or role_exists):
-        logger.info("\nRecreating existing resources:")
-        if database_exists:
-            client.drop_database(rn.database_name)
-            logger.info("  • Dropped database")
-            database_exists = False
+    # Handle recreation of user and role if needed
+    if recreate_resources:
         if user_exists:
             client.drop_user(rn.user_name)
             logger.info("  • Dropped user")
@@ -78,12 +91,7 @@ def project_create_resources(
             logger.info("  • Dropped role")
             role_exists = False
 
-    # Create resources
-    logger.info("\nCreating resources:")
-    if not database_exists:
-        client.create_database(rn.database_name)
-        logger.info("  • Created database")
-
+    # Create resources in project database context
     if not user_exists:
         client.create_user(user_name=rn.user_name, password=rn.user_password)
         logger.info("  • Created user")
@@ -116,6 +124,9 @@ def project_create_resources(
         client.grant_role(rn.user_name, rn.role_name)
         logger.info(f"\nAssigned role '{rn.role_name}' to user '{rn.user_name}'")
 
+    # Switch back to default database
+    client.using_database("default")
+
 
 def format_resource_status(
     name: str, exists: bool, resource_type: str = "resource"
@@ -134,20 +145,25 @@ def project_describe_resources(
     role_name = f"role_{project_name}"
 
     database_exists = database_name in client.list_databases()
-    role_exists = role_name in client.list_roles()
-
-    users = client.list_users()
 
     logger.info(f"\nProject resources for '{project_name}':")
     logger.info("─" * 50)
     logger.info(format_resource_status(database_name, database_exists, "database"))
-    logger.info(format_resource_status(role_name, role_exists, "role"))
 
     if not database_exists:
         logger.info("\nℹ️  No additional information (database does not exist)")
         return
 
-    collections: list[str] = client.list_collections()
+    # Switch to project database context
+    client.using_database(database_name)
+
+    # Get resources in database context
+    role_exists = role_name in client.list_roles()
+    users = client.list_users()
+    collections = client.list_collections()
+
+    logger.info(format_resource_status(role_name, role_exists, "role"))
+
     if collections:
         logger.info("\nCollections:")
         for coll in collections:
@@ -169,6 +185,9 @@ def project_describe_resources(
                     for p in privileges:
                         logger.info(f"      • {p['privilege']} on {p['object_type']}")
 
+    # Switch back to default database
+    client.using_database("default")
+
 
 def project_drop_resources(
     client: MilvusClient,
@@ -183,24 +202,27 @@ def project_drop_resources(
     user_name = user_name or f"user_{project_name}"
 
     database_exists = database_name in client.list_databases()
-    user_exists = user_name in client.list_users()
-    role_exists = role_name in client.list_roles()
 
     # Log initial status
     logger.info(f"\nProject resources for '{project_name}':")
     logger.info("─" * 50)
     logger.info(format_resource_status(database_name, database_exists, "database"))
-    logger.info(format_resource_status(user_name, user_exists, "user"))
-    logger.info(format_resource_status(role_name, role_exists, "role"))
 
-    if not any([database_exists, user_exists, role_exists]):
+    if not database_exists:
         logger.info("\nℹ️  No resources to drop")
         return
 
+    # Switch to project database context
+    client.using_database(database_name)
+
+    # Check and drop resources within database context
+    user_exists = user_name in client.list_users()
+    role_exists = role_name in client.list_roles()
+
+    logger.info(format_resource_status(user_name, user_exists, "user"))
+    logger.info(format_resource_status(role_name, role_exists, "role"))
+
     logger.info("\nDropping resources:")
-    if database_exists:
-        client.drop_database(database_name)
-        logger.info(f"  • Dropped database '{database_name}'")
 
     if user_exists:
         client.drop_user(user_name)
@@ -211,6 +233,13 @@ def project_drop_resources(
             client.revoke_privilege(**priv)
         client.drop_role(role_name)
         logger.info(f"  • Dropped role '{role_name}'")
+
+    # Switch back to default database to drop the project database
+    client.using_database("default")
+
+    if database_exists:
+        client.drop_database(database_name)
+        logger.info(f"  • Dropped database '{database_name}'")
 
 
 def database_list_all(client: MilvusClient):
