@@ -1,3 +1,15 @@
+"""Project management module for Milvus databases.
+
+This module provides functions to create, describe, and manage projects in Milvus,
+where a project consists of:
+- A dedicated database
+- A role with appropriate privileges
+- A user assigned to that role
+
+Each function handles the necessary resource management operations while maintaining
+proper database context switching.
+"""
+
 import logging
 from dataclasses import dataclass
 
@@ -8,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResourceNaming:
+    """Dataclass for naming conventions of project resources."""
+
     project_name: str
     database_name: str
     role_name: str
@@ -16,14 +30,14 @@ class ResourceNaming:
 
 
 class ResourceExistsError(Exception):
-    pass
+    """Exception raised when a resource already exists."""
 
 
 def create_resources(
     client: MilvusClient,
     resource_names: ResourceNaming,
-    recreate_resources: bool = False,
-):
+) -> None:
+    """Create project resources in Milvus, including database, role, and user."""
     rn = resource_names
 
     # Check database existence first
@@ -33,13 +47,6 @@ def create_resources(
     logger.info(f"\nProject resources for '{rn.project_name}':")
     logger.info("─" * 50)
     logger.info(format_resource_status(rn.database_name, database_exists, "database"))
-
-    # Handle database recreation if needed
-    if recreate_resources and database_exists:
-        logger.info("\nRecreating database:")
-        client.drop_database(rn.database_name)
-        logger.info("  • Dropped database")
-        database_exists = False
 
     # Create database and switch context
     if not database_exists:
@@ -55,17 +62,6 @@ def create_resources(
 
     logger.info(format_resource_status(rn.user_name, user_exists, "user"))
     logger.info(format_resource_status(rn.role_name, role_exists, "role"))
-
-    # Handle recreation of user and role if needed
-    if recreate_resources:
-        if user_exists:
-            client.drop_user(rn.user_name)
-            logger.info("  • Dropped user")
-            user_exists = False
-        if role_exists:
-            client.drop_role(rn.role_name)
-            logger.info("  • Dropped role")
-            role_exists = False
 
     # Create resources in project database context
     if not user_exists:
@@ -105,7 +101,9 @@ def create_resources(
 
 
 def format_resource_status(
-    name: str, exists: bool, resource_type: str = "resource"
+    name: str,
+    exists: bool,
+    resource_type: str = "resource",
 ) -> str:
     """Format a resource status line with consistent symbols and indentation."""
     status_symbol = "✓" if exists else "×"
@@ -114,8 +112,10 @@ def format_resource_status(
 
 
 def describe_resources(
-    client: MilvusClient, project_name: str, user_name: None | str = None
-):
+    client: MilvusClient,
+    project_name: str,
+    user_name: None | str = None,
+) -> None:
     """List the resources and collections in a project and check user privileges."""
     database_name = f"db_{project_name}"
     role_name = f"role_{project_name}"
@@ -155,7 +155,7 @@ def describe_resources(
             for role in client.list_roles():
                 privileges: list[dict[str, str]] = client.describe_role(role_name=role)[
                     "privileges"
-                ]
+                ]  # type: ignore
                 if privileges:
                     logger.info(f"    Role '{role}':")
                     for p in privileges:
@@ -169,7 +169,7 @@ def drop_resources(
     client: MilvusClient,
     project_name: str,
     database_name: None | str = None,
-):
+) -> None:
     """Drop all resources associated with a project."""
     database_name = database_name or f"db_{project_name}"
 
@@ -214,7 +214,7 @@ def change_user_password(
     user_name: str,
     old_password: str,
     new_password: str,
-):
+) -> None:
     """Change password for a user in a project."""
     database_name = f"db_{project_name}"
 
@@ -229,12 +229,14 @@ def change_user_password(
         # Check if user exists
         if user_name not in client.list_users():
             raise ValueError(
-                f"User '{user_name}' does not exist in database '{database_name}'"
+                f"User '{user_name}' does not exist in database '{database_name}'",
             )
 
         # Change the password
         client.update_password(
-            user_name=user_name, old_password=old_password, new_password=new_password
+            user_name=user_name,
+            old_password=old_password,
+            new_password=new_password,
         )
         logger.info(f"Successfully updated password for user '{user_name}'")
 

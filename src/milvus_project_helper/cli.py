@@ -1,10 +1,24 @@
+"""Command Line Interface for Milvus project management.
+
+This module implements the CLI commands for managing Milvus projects:
+- project create: Create a new project with associated resources
+- project describe: Show details about an existing project
+- project drop: Remove a project and its resources
+- project change-password: Change a user's password
+- database list: List all databases and their collections
+
+All commands support the MILVUS_URI environment variable for connection settings.
+"""
+
+from __future__ import annotations
+
 import logging
-from typing_extensions import Annotated
 
 import typer
 from pymilvus import MilvusClient
+from typing_extensions import Annotated
 
-from . import project, database, utils
+from . import database, project, utils
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +43,18 @@ def project_create(
         str,
         typer.Option(
             envvar="MILVUS_URI",
-            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'. "
+            help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'."
             "The user must be able to create databases, roles and users",
         ),
     ],
-    yes: bool = typer.Option(
-        False,
-        "--yes",
-        "-y",
-        help="Skip confirmation prompt",
-    ),
-    force: bool = typer.Option(
-        False,
-        help="Recreate the project resources if they already exist",
-    ),
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip confirmation prompt",
+        ),
+    ] = False,
     database_name: Annotated[
         None | str,
         typer.Option(
@@ -65,12 +77,15 @@ def project_create(
         ),
     ] = None,
     user_password: Annotated[
-        None | str, typer.Option(help="Password for the new user")
+        None | str,
+        typer.Option(help="Password for the new user"),
     ] = None,
     project_name: Annotated[
-        str, typer.Argument(help="New project name")
+        str,
+        typer.Argument(help="New project name"),
     ] = "new-project",
-):
+) -> None:
+    """Create a new project with associated resources."""
     logger.info(f"\nSetting up project '{project_name}':")
     logger.info("─" * 50)
 
@@ -118,7 +133,6 @@ def project_create(
         project.create_resources(
             client,
             resource_names,
-            recreate_resources=force,
         )
     except project.ResourceExistsError as e:
         typer.echo("❌ " + str(e))
@@ -136,15 +150,17 @@ def project_describe(
         ),
     ],
     project_name: Annotated[
-        str, typer.Argument(help="Name of the project to list resources for")
+        str,
+        typer.Argument(help="Name of the project to list resources for"),
     ],
     user_name: Annotated[
         None | str,
         typer.Option(
-            help="Name of the user to check privileges for (default: check all users)"
+            help="Name of the user to check privileges for (default: check all users)",
         ),
     ] = None,
-):
+) -> None:
+    """List resources for a project."""
     logger.info(f"Listing resources for project `{project_name}`...")
 
     client = MilvusClient(uri=uri)
@@ -169,18 +185,22 @@ def project_drop(
             help="Name of the database to drop (default: 'db_<project_name>')",
         ),
     ] = None,
-    yes: bool = typer.Option(
-        False,
-        "--yes",
-        "-y",
-        help="Skip confirmation prompt",
-    ),
-):
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip confirmation prompt",
+        ),
+    ] = False,
+) -> None:
+    """Drop a project and its resources."""
     db_name = database_name or f"db_{project_name}"
     logger.info(f"About to drop project `{project_name}` (database: {db_name})")
 
     if not yes and not typer.confirm(
-        "\nAre you sure you want to proceed?", default=False
+        "\nAre you sure you want to proceed?",
+        default=False,
     ):
         logger.info("Operation cancelled.")
         raise typer.Exit()
@@ -206,18 +226,19 @@ def project_change_password(
     user_name: Annotated[
         str,
         typer.Option(
-            help="Name of the user to change password for (default: check all users)"
+            help="Name of the user to change password for (default: check all users)",
         ),
     ],
     old_password: Annotated[
-        None | str, typer.Option(help="Old password for the user")
+        None | str,
+        typer.Option(help="Old password for the user"),
     ] = None,
     new_password: Annotated[
-        None | str, typer.Option(help="New password for the user")
+        None | str,
+        typer.Option(help="New password for the user"),
     ] = None,
-):
+) -> None:
     """Change password for a user in a project."""
-
     try:
         client = MilvusClient(uri=uri)
 
@@ -253,7 +274,7 @@ def project_change_password(
             new_password=new_password,
         )
     except Exception as e:
-        typer.echo(f"Error: {str(e)}", err=True)
+        typer.echo(f"Error: {e!s}", err=True)
         raise typer.Exit(1)
 
 
@@ -266,7 +287,7 @@ def database_list(
             help="URI of the Milvus gRPC endpoint, e.g. 'http://root:Milvus@localhost:19530'",
         ),
     ],
-):
+) -> None:
     """List all databases and their collections."""
     client = MilvusClient(uri=uri)
     database.list_all(client)

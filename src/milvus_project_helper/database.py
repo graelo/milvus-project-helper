@@ -1,3 +1,10 @@
+"""Database operations module for Milvus.
+
+This module provides utility functions for working with Milvus databases:
+- Listing databases and their collections
+- Checking database existence and contents
+"""
+
 import logging
 
 from pymilvus import MilvusClient
