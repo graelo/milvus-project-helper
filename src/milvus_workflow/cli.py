@@ -80,34 +80,38 @@ def project_create(
     logger.info(f"\nSetting up project '{project_name}':")
     logger.info("─" * 50)
 
-    if not user_password:
-        user_password = typer.prompt("Enter password for the new user", hide_input=True)
-    assert user_password is not None and user_password != ""
-
-    try:
-        check_password_strength(user_password)
-    except PasswordStrengthError as e:
-        typer.echo("❌ " + str(e))  # Keep typer.echo for error messages
-        raise typer.Exit(code=1)
-
+    # Build resource names first, use placeholder for password in dry-run
     resource_names = ProjectResourceNaming(
         project_name=project_name,
         database_name=database_name or f"db_{project_name}",
         role_name=role_name or f"role_{project_name}",
         user_name=user_name or f"user_{project_name}",
-        user_password=user_password,
+        user_password="<password>" if dry_run else user_password or "",
     )
 
     logger.info("\nResource naming:")
     for k, v in resource_names.__dict__.items():
         if k == "user_password":
-            logger.info(f"  • {k}: (hidden)")
+            logger.info(f"  • {k}: {'(not set)' if dry_run else '(not yet set)'}")
         else:
             logger.info(f"  • {k}: {v}")
 
     if dry_run:
         logger.info("\nℹ️  Dry run: exiting without executing commands")
         return
+
+    # Only prompt for password when actually creating resources
+    if not resource_names.user_password:
+        resource_names.user_password = typer.prompt(
+            "Enter password for the new user", hide_input=True
+        )
+    assert resource_names.user_password != ""
+
+    try:
+        check_password_strength(resource_names.user_password)
+    except PasswordStrengthError as e:
+        typer.echo("❌ " + str(e))  # Keep typer.echo for error messages
+        raise typer.Exit(code=1)
 
     client = MilvusClient(uri=uri)
 
