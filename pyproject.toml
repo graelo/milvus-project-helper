@@ -1,5 +1,5 @@
 [project]
-name = "milvus-cli"
+name = "milvus-project-helper"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
@@ -24,7 +24,7 @@ dev-dependencies = []
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/milvus_workflow"]
+packages = ["src/milvus_project_helper"]
 
 [project.scripts]
-wilvus = "milvus_workflow.cli:app"
+milvus-project = "milvus_project_helper.cli:app"
