@@ -102,8 +102,13 @@ def project_create(
 
     # Only prompt for password when actually creating resources
     if not resource_names.user_password:
+        logger.info("")
         resource_names.user_password = typer.prompt(
-            "Enter password for the new user", hide_input=True
+            "Enter password for the new user",
+            hide_input=True,
+            confirmation_prompt=True,  # Ask user to type twice
+            show_default=False,
+            show_choices=False,
         )
     assert resource_names.user_password != ""
 
@@ -195,12 +200,6 @@ def project_drop(
         logger.info(f"  role: {role_name or f'role_{project_name}'}")
         logger.info(f"  user: {user_name or f'user_{project_name}'}")
         return
-
-    if not typer.confirm(
-        "Are you sure you want to drop these resources?"
-    ):  # Keep interactive prompts
-        typer.echo("Operation cancelled")  # Keep user feedback
-        raise typer.Exit(code=1)
 
     client = MilvusClient(uri=uri)
     project_drop_resources(
