@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass
 
 from pymilvus import MilvusClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -52,10 +55,12 @@ def project_create_resources(
     user_exists = rn.user_name in client.list_users()
     role_exists = rn.role_name in client.list_roles()
 
-    # Print the status of each resource
-    print(f"Database {rn.database_name} exists: {'✅' if database_exists else '❌'}")
-    print(f"User {rn.user_name} exists: {'✅' if user_exists else '❌'}")
-    print(f"Role {rn.role_name} exists: {'✅' if role_exists else '❌'}")
+    # Log the status of each resource
+    logger.info(
+        f"Database {rn.database_name} exists: {'✅' if database_exists else '❌'}"
+    )
+    logger.info(f"User {rn.user_name} exists: {'✅' if user_exists else '❌'}")
+    logger.info(f"Role {rn.role_name} exists: {'✅' if role_exists else '❌'}")
 
     # 0. Drop existing resources if recreate=True
     if recreate_resources:
@@ -105,11 +110,11 @@ def project_create_resources(
                 object_name="*",
                 privilege=privilege,
             )
-            print(f"Granted {privilege} privilege to role {rn.role_name}")
+            logger.info(f"Granted {privilege} privilege to role {rn.role_name}")
 
         # Assign role to user
         client.grant_role(rn.user_name, rn.role_name)
-        print(f"Assigned role {rn.role_name} to user {rn.user_name}")
+        logger.info(f"Assigned role {rn.role_name} to user {rn.user_name}")
 
 
 def project_describe_resources(
@@ -128,28 +133,28 @@ def project_describe_resources(
     )
     role_exists = role_name in client.list_roles()
 
-    print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
-    print(
+    logger.info(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
+    logger.info(
         f"User {user_name or default_user_name} exists: {'✅' if user_exists else '❌'}"
     )
-    print(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+    logger.info(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
 
     if database_exists:
         collections: list[str] = client.list_collections()
-        print(f"Collections in {database_name}: {collections}")
+        logger.info(f"Collections in {database_name}: {collections}")
 
         users_to_check = [user_name] if user_name else client.list_users()
         for user in users_to_check:
-            print(f"Checking roles of user `{user}`")
+            logger.info(f"Checking roles of user `{user}`")
             for role in client.list_roles():
-                print(f"  role {role}:")
+                logger.info(f"  role {role}:")
                 privileges: list[dict[str, str]] = client.describe_role(role_name=role)[
                     "privileges"
                 ]  # type: ignore
                 for p in privileges:
-                    print(f"    - {p}")
+                    logger.info(f"    - {p}")
     else:
-        print(f"No collections found as database {database_name} does not exist.")
+        logger.info(f"No collections found as database {database_name} does not exist.")
 
 
 def project_drop_resources(
@@ -170,35 +175,35 @@ def project_drop_resources(
     user_exists = user_name in client.list_users()
     role_exists = role_name in client.list_roles()
 
-    # Print the status of each resource
-    print(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
-    print(f"User {user_name} exists: {'✅' if user_exists else '❌'}")
-    print(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
+    # Log the status of each resource
+    logger.info(f"Database {database_name} exists: {'✅' if database_exists else '❌'}")
+    logger.info(f"User {user_name} exists: {'✅' if user_exists else '❌'}")
+    logger.info(f"Role {role_name} exists: {'✅' if role_exists else '❌'}")
 
     # Drop in reverse order of dependencies
     if database_exists:
         client.drop_database(database_name)
-        print(f"Dropped database {database_name}")
+        logger.info(f"Dropped database {database_name}")
 
     if user_exists:
         client.drop_user(user_name)
-        print(f"Dropped user {user_name}")
+        logger.info(f"Dropped user {user_name}")
 
     if role_exists:
         for priv in client.describe_role(role_name)["privileges"]:  # type: ignore
             client.revoke_privilege(**priv)
         client.drop_role(role_name)
-        print(f"Dropped role {role_name}")
+        logger.info(f"Dropped role {role_name}")
 
 
 def database_list_all(client: MilvusClient):
     """List all databases and their details."""
     databases = client.list_databases()
-    print(f"Found {len(databases)} databases:")
+    logger.info(f"Found {len(databases)} databases:")
     for db in databases:
-        print(f"\nDatabase: {db}")
+        logger.info(f"\nDatabase: {db}")
         try:
             collections = client.list_collections()
-            print(f"  Collections: {collections}")
+            logger.info(f"  Collections: {collections}")
         except Exception as _:
-            print("  Collections: Unable to list (insufficient privileges)")
+            logger.info("  Collections: Unable to list (insufficient privileges)")
