@@ -4,16 +4,16 @@ from typing_extensions import Annotated
 import typer
 from pymilvus import MilvusClient
 
-from .core import (
-    ProjectResourceNaming,
+from .project import (
+    ResourceNaming,
     check_password_strength,
     project_create_resources,
     project_drop_resources,
+    project_describe_resources,
     PasswordStrengthError,
     ResourceExistsError,
-    project_describe_resources,
-    database_list_all,
 )
+from . import database
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def project_create(
     logger.info("─" * 50)
 
     # Build resource names first, use placeholder for password in dry-run
-    resource_names = ProjectResourceNaming(
+    resource_names = ResourceNaming(
         project_name=project_name,
         database_name=database_name or f"db_{project_name}",
         role_name=role_name or f"role_{project_name}",
@@ -223,4 +223,4 @@ def database_list(
 ):
     """List all databases and their collections."""
     client = MilvusClient(uri=uri)
-    database_list_all(client)
+    database.list_all(client)

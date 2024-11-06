@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ProjectResourceNaming:
+class ResourceNaming:
     project_name: str
     database_name: str
     role_name: str
@@ -45,7 +45,7 @@ def check_password_strength(password: str):
 
 def project_create_resources(
     client: MilvusClient,
-    resource_names: ProjectResourceNaming,
+    resource_names: ResourceNaming,
     recreate_resources: bool = False,
 ):
     rn = resource_names
@@ -240,16 +240,3 @@ def project_drop_resources(
     if database_exists:
         client.drop_database(database_name)
         logger.info(f"  • Dropped database '{database_name}'")
-
-
-def database_list_all(client: MilvusClient):
-    """List all databases and their details."""
-    databases = client.list_databases()
-    logger.info(f"Found {len(databases)} databases:")
-    for db in databases:
-        logger.info(f"\nDatabase: {db}")
-        try:
-            collections = client.list_collections()
-            logger.info(f"  Collections: {collections}")
-        except Exception as _:
-            logger.info("  Collections: Unable to list (insufficient privileges)")
