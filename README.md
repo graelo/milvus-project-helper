@@ -27,7 +27,7 @@ or `--uri` option.
 Create a new project with associated database, role and user:
 
 ```sh
-$ milvus-project project create myproject --user-name alice -y
+$ milvus-project-helper project create myproject --user-name alice -y
 
 Setting up project 'myproject':
 ──────────────────────────────────────────────────
@@ -68,7 +68,7 @@ Assigned role 'role_myproject' to user 'alice'
 View all databases and their collections:
 
 ```sh
-$ milvus-project database list
+$ milvus-project-helper database list
 Found 2 databases:
 
 Database: default
@@ -83,7 +83,7 @@ Database: db_myproject
 Remove a project and all its resources:
 
 ```sh
-$ milvus-project project drop myproject
+$ milvus-project-helper project drop myproject
 About to drop project `myproject` (database: db_myproject)
 
 Are you sure you want to proceed? [y/N]: y

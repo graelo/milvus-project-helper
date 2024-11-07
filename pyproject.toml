@@ -28,4 +28,4 @@ dev = [
 ]
 
 [project.scripts]
-milvus-project = "milvus_project_helper.cli:app"
+milvus-project-helper = "milvus_project_helper.cli:app"
