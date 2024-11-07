@@ -1,7 +1,7 @@
 [project]
 name = "milvus-project-helper"
 version = "0.1.0"
-description = "Add your description here"
+description = "Help create Milvus database, role and user"
 authors = [
     { name = "graelo", email = "graelo@graelo.cc" }
 ]

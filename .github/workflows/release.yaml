@@ -1,4 +1,4 @@
-name: release
+name: Release
 
 on:
   push:
@@ -74,10 +74,10 @@ jobs:
     needs: [details, check_pypi]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -182,7 +182,7 @@ jobs:
           homebrew-tap: graelo/homebrew-tap
           # base-branch: main
           create-pullrequest: true
-          download-url: https://github.com/graelo/milvus_project_helper/archive/refs/tags/${{ steps.extract-version.outputs.tag-name }}.tar.gz
+          download-url: https://github.com/graelo/milvus-project-helper/archive/refs/tags/${{ steps.extract-version.outputs.tag-name }}.tar.gz
           commit-message: |
             {{formulaName}} {{version}}
 
