@@ -1,5 +1,5 @@
 [project]
-name = "milvus-cli"
+name = "milvus-project-helper"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
@@ -16,15 +16,16 @@ requires-python = ">= 3.11"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.rye]
-managed = true
-dev-dependencies = []
-
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/milvus_workflow"]
+packages = ["src/milvus_project_helper"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+]
 
 [project.scripts]
-wilvus = "milvus_workflow.cli:app"
+milvus-project = "milvus_project_helper.cli:app"
